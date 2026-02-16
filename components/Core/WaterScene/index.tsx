@@ -1,9 +1,3 @@
-
-
-
-
-
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -17,6 +11,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { WaterConfig } from '../../../types/index.tsx';
 import { createSandTexture } from './utils/createSandTexture.ts';
+import { createCausticGenerator } from './utils/createCausticTexture.ts';
 import { godRayVertexShader, godRayFragmentShader } from './shaders/godray.ts';
 import { waterDropVertexShader, waterDropFragmentShader } from './shaders/waterDrop.ts';
 import { rippleVertexShader, rippleFragmentShader } from './shaders/ripple.ts';
@@ -133,11 +128,17 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
   const raysGroupRef = useRef<THREE.Group | null>(null);
   const bubblesRef = useRef<THREE.Points | null>(null);
 
+  // Baked Textures Refs
+  const causticGeneratorRef = useRef<ReturnType<typeof createCausticGenerator> | null>(null);
+  const causticTextureRef = useRef<THREE.CanvasTexture | null>(null);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // 1. Generate Sand Texture
+    // 1. Generate Procedural Textures
     sandTextureRef.current = createSandTexture();
+    causticGeneratorRef.current = createCausticGenerator(512);
+    causticTextureRef.current = causticGeneratorRef.current.getTexture();
     
     // 2. Initialize Loaders & Generators
     hdrLoaderRef.current = new HDRLoader();
@@ -319,7 +320,8 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             uColorDeep: { value: new THREE.Color(configRef.current.colorDeep) },
             uColorShallow: { value: new THREE.Color(configRef.current.colorShallow) },
             uLightIntensity: { value: configRef.current.underwaterLightIntensity },
-            tSand: { value: sandTextureRef.current }
+            tSand: { value: sandTextureRef.current },
+            tCaustics: { value: causticTextureRef.current },
         }
     });
     materialsRef.current.push(bedMat);
@@ -372,6 +374,11 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             frameIdRef.current = requestAnimationFrame(animate);
             return;
         }
+        
+        // Update caustic texture
+        if (causticGeneratorRef.current) {
+            causticGeneratorRef.current.update(time);
+        }
 
         // --- RIPPLE STEP ---
         if (simMaterialRef.current && simSceneRef.current && simCameraRef.current && renderTargetA.current && renderTargetB.current) {
@@ -422,9 +429,12 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             if (!scene.fog) { // create fog if it doesn't exist
                 scene.fog = new THREE.Fog(currentConfig.colorDeep, currentConfig.fogCutoffStart, currentConfig.fogCutoffEnd);
             } else { // update existing fog
-                scene.fog.color.set(currentConfig.colorDeep);
-                scene.fog.near = currentConfig.fogCutoffStart;
-                scene.fog.far = currentConfig.fogCutoffEnd;
+                // FIX: Added instanceof check to satisfy TypeScript that scene.fog is of type Fog, not FogExp2.
+                if (scene.fog instanceof THREE.Fog) {
+                    scene.fog.color.set(currentConfig.colorDeep);
+                    scene.fog.near = currentConfig.fogCutoffStart;
+                    scene.fog.far = currentConfig.fogCutoffEnd;
+                }
             }
             scene.environment = null;
             if(raysGroupRef.current) raysGroupRef.current.visible = true;
@@ -542,6 +552,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
         envMapRef.current?.dispose();
         if (sandTextureRef.current) sandTextureRef.current.dispose();
         if (skyTextureRef.current) skyTextureRef.current.dispose();
+        if (causticTextureRef.current) causticTextureRef.current.dispose();
         defaultTex.dispose();
         if (rendererRef.current) rendererRef.current.dispose();
     };

@@ -46,6 +46,7 @@ uniform vec3 uColorDeep;
 uniform vec3 uColorShallow;
 uniform float uLightIntensity;
 uniform sampler2D tSand; // Generated Noise Texture
+uniform sampler2D tCaustics; // Pre-blurred caustics texture
 
 varying vec2 vUv;
 varying vec3 vWorldPos;
@@ -53,37 +54,6 @@ varying vec3 vViewPosition;
 varying float vElevation;
 
 ${commonShaderUtils}
-
-// Voronoi Caustics
-float voronoi( in vec2 x, float t ) {
-    vec2 n = floor(x);
-    vec2 f = fract(x);
-    float m = 1.0;
-    for( int j=-1; j<=1; j++ )
-    for( int i=-1; i<=1; i++ ) {
-        vec2 g = vec2( float(i), float(j) );
-        vec2 o = hash2( n + g );
-        o = 0.5 + 0.5*sin( t + 6.2831*o ); 
-        vec2 r = g + o - f;
-        float d = dot(r,r);
-        if( d<m ) m=d;
-    }
-    return m;
-}
-
-vec3 getCausticRGB(vec2 uv) {
-    vec3 col = vec3(0.0);
-    float t = uTime;
-    for(int i=0; i<3; i++) {
-        float shift = float(i) * 0.005; 
-        vec2 p = uv + shift;
-        float v = voronoi(p * 0.8, t * 1.5);
-        // Soften the caustic lines to make them blur more nicely.
-        float intensity = pow(v * 2.0, 3.5) * 12.0;
-        col[i] = intensity;
-    }
-    return col;
-}
 
 void main() {
     // 1. TEXTURE MAPPING
@@ -135,22 +105,18 @@ void main() {
     float absorption = 1.0 - exp(-depth * 0.015); // Reduced vertical absorption
     vec3 finalColor = mix(albedo, uColorDeep * 0.2, absorption * 0.8);
 
-    // 6. CAUSTICS
-    vec3 caustics = vec3(0.0);
-    float scale = 0.15;
-    float blurSize = 0.3; // Drastically increased blur radius
+    // 6. CAUSTICS (Optimized)
+    // The texture coordinates need to move with time to simulate water movement
+    vec2 causticUv = vWorldPos.xz * 0.01;
+    causticUv.x += uTime * 0.01;
+    causticUv.y += uTime * 0.005;
 
-    // Increased kernel from 3x3 to 5x5 for a much softer effect
-    for (int x = -2; x <= 2; x++) {
-        for (int y = -2; y <= 2; y++) {
-            vec2 offset = vec2(float(x), float(y)) * blurSize;
-            caustics += getCausticRGB((vWorldPos.xz + offset) * scale);
-        }
-    }
-    caustics /= 25.0; // Normalize by number of samples (5*5)
-
-    float causticVis = exp(-depth * 0.05);
-    vec3 causticLight = caustics * uColorShallow * uLightIntensity * 1.5;
+    // The caustic pattern itself is animated in the texture, but we can also scroll it
+    // for a more dynamic effect.
+    float causticStrength = texture2D(tCaustics, causticUv).r;
+    
+    float causticVis = exp(-depth * 0.05); // Caustics fade with depth
+    vec3 causticLight = causticStrength * uColorShallow * uLightIntensity * 2.5; // Boosted intensity
     
     finalColor += causticLight * causticVis;
 
