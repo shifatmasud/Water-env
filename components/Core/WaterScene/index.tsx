@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -21,7 +20,7 @@ interface WaterSceneProps {
 }
 
 const skyboxUrls: Record<string, string> = {
-  'Evening Road': 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/evening_road_01_1k.hdr',
+  'Qwantani Noon': 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/qwantani_noon_puresky_1k.hdr',
 };
 
 const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) => {
@@ -305,7 +304,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) =
     if (hdrLoaderRef.current && sceneRef.current && pmremGeneratorRef.current) {
       const loader = hdrLoaderRef.current;
       const pmremGenerator = pmremGeneratorRef.current;
-      const url = skyboxUrls['Evening Road'];
+      const url = skyboxUrls['Qwantani Noon'];
       
       loader.load(url, (texture) => {
           texture.mapping = THREE.EquirectangularReflectionMapping;
