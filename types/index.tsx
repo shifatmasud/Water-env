@@ -59,9 +59,11 @@ export interface WaterConfig {
   normalFlatness: number; // 0-100
   
   // Underwater
-  underwaterFogDensity: number; // 0-1
+  underwaterDimming: number; // 0-1
   underwaterLightIntensity: number; // 0-5
   ior: number; // 1.0 - 2.33
+  fogCutoffStart: number;
+  fogCutoffEnd: number;
   
   // Ripple Physics
   rippleDamping: number; // 0.9 - 0.999

@@ -19,7 +19,7 @@ void main() {
     vec3 pos = position;
     
     // Scale down coord for broader dunes
-    vec2 p = pos.xy * 0.008; 
+    vec2 p = pos.xy * 0.002; 
     
     // Rolling dunes: Less jagged, more flowy
     // We combine sine waves with noise
@@ -47,7 +47,6 @@ uniform float uTime;
 uniform vec3 uColorDeep;
 uniform vec3 uColorShallow;
 uniform float uLightIntensity;
-uniform float uFogDensity;
 uniform sampler2D tSand; // Generated Noise Texture
 
 varying vec2 vUv;
@@ -131,22 +130,15 @@ void main() {
     
     albedo += vec3(1.0) * specular;
 
-    // 5. DEPTH & FOG
+    // 5. DEPTH
     // Vertical Absorption
     float depth = max(0.0, -vWorldPos.y);
     float absorption = 1.0 - exp(-depth * 0.015); // Reduced vertical absorption
-    vec3 absorbedAlbedo = mix(albedo, uColorDeep * 0.2, absorption * 0.8);
+    vec3 finalColor = mix(albedo, uColorDeep * 0.2, absorption * 0.8);
 
-    // Horizontal Fog
-    float dist = length(vViewPosition);
-    float fogFactor = 1.0 - exp(-dist * uFogDensity * 0.3);
-    
-    vec3 finalColor = mix(absorbedAlbedo, uColorDeep, fogFactor);
-    
     // 6. CAUSTICS
     vec3 caustics = getCausticRGB(vWorldPos.xz * 0.15); 
-    // Caustics fade with depth but cut through fog slightly
-    float causticVis = exp(-depth * 0.05) * (1.0 - fogFactor * 0.5);
+    float causticVis = exp(-depth * 0.05);
     vec3 causticLight = caustics * uColorShallow * uLightIntensity * 1.5;
     
     finalColor += causticLight * causticVis;

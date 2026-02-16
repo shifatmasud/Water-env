@@ -1,5 +1,8 @@
 
 
+
+
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -11,25 +14,16 @@ import { ElementProps } from './ElementProps.tsx';
 import { WaterSimulation } from './WaterSimulation.tsx';
 import { InteractionState } from './InteractionState.tsx';
 import { Inspector } from './Inspector.tsx';
+import type { SkyboxOption } from '../../../environments.ts';
 
 interface ControlPanelProps {
-  // btnProps: MetaButtonProps;
   waterConfig: WaterConfig;
-  // onPropChange: (keyOrObj: string | Partial<MetaButtonProps>, value?: any) => void;
   onWaterPropChange: (updates: Partial<WaterConfig>) => void;
   onSyncFromSky: () => void;
-  // radiusMotionValue: any; // Using any for MotionValue<number>
-  // onRadiusCommit: (value: number) => void;
-  // showMeasurements: boolean;
-  // onToggleMeasurements: () => void;
-  // showTokens: boolean;
-  // onToggleTokens: () => void;
-  // // 3D View Props
-  // view3D: boolean;
-  // onToggleView3D: () => void;
-  // layerSpacing: any; // Using any for MotionValue<number>
-  // viewRotateX: any;
-  // viewRotateZ: any;
+  isSplitView: boolean;
+  onToggleSplitView: () => void;
+  skyboxOptions: SkyboxOption[];
+  onHdrUpload: (file: File) => void;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = (props) => {
@@ -52,6 +46,10 @@ const ControlPanel: React.FC<ControlPanelProps> = (props) => {
         waterConfig={props.waterConfig}
         onWaterPropChange={props.onWaterPropChange}
         onSyncFromSky={props.onSyncFromSky}
+        isSplitView={props.isSplitView}
+        onToggleSplitView={props.onToggleSplitView}
+        skyboxOptions={props.skyboxOptions}
+        onHdrUpload={props.onHdrUpload}
       />
       
       {/*

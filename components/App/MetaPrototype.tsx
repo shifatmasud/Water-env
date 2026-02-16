@@ -1,5 +1,9 @@
 
 
+
+
+
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -15,7 +19,7 @@ import ControlPanel from '../Package/ControlPanel/index.tsx';
 import CodePanel from '../Package/CodePanel.tsx';
 import ConsolePanel from '../Package/ConsolePanel.tsx';
 import { WaterConfig, WindowId, WindowState, LogEntry } from '../../types/index.tsx';
-import { skyboxOptions } from '../../environments.ts';
+import { skyboxOptions, type SkyboxOption } from '../../environments.ts';
 
 interface Palette {
   colorDeep: string;
@@ -42,6 +46,8 @@ const MetaPrototype = () => {
   const [windows, setWindows] = useState<Record<WindowId, WindowState>>(getInitialWindowState);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const sceneControllerRef = useRef<Partial<SceneController>>({});
+  const [isSplitView, setIsSplitView] = useState(false);
+  const [skyboxOptionsState, setSkyboxOptionsState] = useState<SkyboxOption[]>(skyboxOptions);
 
   const addLog = useCallback((message: string) => {
     const newLog: LogEntry = {
@@ -64,15 +70,23 @@ const MetaPrototype = () => {
     waveSpeed: 0.108,
     waveScale: 0.7223,
     normalFlatness: 50,
-    underwaterFogDensity: 0.15,
+    underwaterDimming: 0.4,
     underwaterLightIntensity: 2.0,
     ior: 1.33,
+    fogCutoffStart: 80,
+    fogCutoffEnd: 300,
     rippleDamping: 0.98,
     rippleStrength: 0.5,
     rippleRadius: 0.04,
     rippleIntensity: 2.5,
     rippleNormalIntensity: 8.0,
   });
+
+  const handleWaterConfigChange = (updates: Partial<WaterConfig>) => {
+    setWaterConfig(prev => ({ ...prev, ...updates }));
+    const changedKeys = Object.keys(updates).join(', ');
+    addLog(`Water config updated: ${changedKeys}`);
+  };
 
   // Expose a method for WaterScene to call back and update colors
   sceneControllerRef.current.updateWaterConfigFromPalette = (palette) => {
@@ -121,17 +135,30 @@ const MetaPrototype = () => {
     }
   };
 
+  const handleToggleSplitView = () => {
+    const nextState = !isSplitView;
+    setIsSplitView(nextState);
+    addLog(`Split view ${nextState ? 'enabled' : 'disabled'}.`);
+  };
+
+  const handleHdrUpload = (file: File) => {
+    if (!file || !file.name.toLowerCase().endsWith('.hdr')) {
+      addLog('Error: Please select a valid .hdr file.');
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const newOption = { name: `Custom: ${file.name}`, url };
+    
+    setSkyboxOptionsState(prev => [...prev, newOption]);
+    handleWaterConfigChange({ skyboxUrl: url });
+    addLog(`Custom HDR '${file.name}' loaded.`);
+  };
+
   // -- Code Panel State --
   const [codeText, setCodeText] = useState(JSON.stringify(waterConfig, null, 2));
   React.useEffect(() => {
     setCodeText(JSON.stringify(waterConfig, null, 2));
   }, [waterConfig]);
-
-  const handleWaterConfigChange = (updates: Partial<WaterConfig>) => {
-    setWaterConfig(prev => ({ ...prev, ...updates }));
-    const changedKeys = Object.keys(updates).join(', ');
-    addLog(`Water config updated: ${changedKeys}`);
-  };
 
   return (
     <div style={{
@@ -141,7 +168,7 @@ const MetaPrototype = () => {
       overflow: 'hidden',
       position: 'relative',
     }}>
-      <Stage waterConfig={waterConfig} sceneController={sceneControllerRef} />
+      <Stage waterConfig={waterConfig} sceneController={sceneControllerRef} isSplitView={isSplitView} />
       <ThemeToggleButton />
       
       {/* Container for Floating Windows */}
@@ -164,6 +191,10 @@ const MetaPrototype = () => {
                 waterConfig={waterConfig}
                 onWaterPropChange={handleWaterConfigChange}
                 onSyncFromSky={handleSyncFromSky}
+                isSplitView={isSplitView}
+                onToggleSplitView={handleToggleSplitView}
+                skyboxOptions={skyboxOptionsState}
+                onHdrUpload={handleHdrUpload}
               />
             </FloatingWindow>
           )}

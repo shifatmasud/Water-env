@@ -1,5 +1,7 @@
 
 
+
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -8,17 +10,23 @@ import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { WaterConfig } from '../../../types/index.tsx';
 import { createSandTexture } from './utils/createSandTexture.ts';
 import { godRayVertexShader, godRayFragmentShader } from './shaders/godray.ts';
+import { waterDropVertexShader, waterDropFragmentShader } from './shaders/waterDrop.ts';
 import { rippleVertexShader, rippleFragmentShader } from './shaders/ripple.ts';
 import { waterVertexShader, waterFragmentShader } from './shaders/water.ts';
 import { terrainVertexShader, terrainFragmentShader } from './shaders/terrain.ts';
+import { underwaterVertexShader, underwaterFragmentShader } from './shaders/underwater.ts';
 import { SceneController } from '../../App/MetaPrototype.tsx';
 
 
 interface WaterSceneProps {
   config: WaterConfig;
+  isSplitView: boolean;
   initialCameraState?: { position: [number, number, number], target: [number, number, number] } | null;
   sceneController?: React.MutableRefObject<Partial<SceneController>>;
 }
@@ -79,8 +87,8 @@ const extractPaletteFromTexture = (texture: THREE.DataTexture) => {
   };
 };
 
-const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sceneController }) => {
-  // FIX: Corrected typo from HTMLDivDivElement to HTMLDivElement.
+const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sceneController, isSplitView }) => {
+  // FIX: Corrected a typo in the type definition for `containerRef` from `HTMLDivDivElement` to `HTMLDivElement`.
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -93,6 +101,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
   const envMapRef = useRef<THREE.Texture | null>(null);
   const hdrLoaderRef = useRef<HDRLoader | null>(null);
   const pmremGeneratorRef = useRef<THREE.PMREMGenerator | null>(null);
+  const lastCameraState = useRef<{position: THREE.Vector3, target: THREE.Vector3} | null>(null);
 
   const configRef = useRef(config);
   useEffect(() => {
@@ -108,6 +117,13 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
   const renderTargetA = useRef<THREE.WebGLRenderTarget | null>(null);
   const renderTargetB = useRef<THREE.WebGLRenderTarget | null>(null);
   
+  // --- POST-PROCESSING REFS ---
+  const composerRef = useRef<EffectComposer | null>(null);
+  const underwaterPassRef = useRef<ShaderPass | null>(null);
+  const waterDropPassRef = useRef<ShaderPass | null>(null);
+  const emergeTimeRef = useRef<number>(-1);
+  const prevIsUnderwater = useRef<boolean>(false);
+
   // Interaction Refs
   const raycaster = useRef(new THREE.Raycaster());
   const mouse = useRef(new THREE.Vector2());
@@ -157,9 +173,60 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
     const controls = new OrbitControls(camera, renderer.domElement);
     controlsRef.current = controls;
     controls.enableDamping = true;
-    controls.maxDistance = 400;
+    controls.maxDistance = 1000;
     controls.minDistance = 1;
     if (initialCameraState) controls.target.set(...initialCameraState.target);
+
+    // --- POST-PROCESSING SETUP ---
+    const target = new THREE.WebGLRenderTarget(width, height, {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat,
+      stencilBuffer: false
+    });
+    target.depthTexture = new THREE.DepthTexture(width, height);
+    target.depthTexture.format = THREE.DepthFormat;
+    target.depthTexture.type = THREE.UnsignedShortType;
+
+    const composer = new EffectComposer(renderer, target);
+    composer.setSize(width, height);
+    composerRef.current = composer;
+    composer.addPass(new RenderPass(scene, camera));
+
+    const underwaterShader = {
+      uniforms: {
+          'tDiffuse': { value: null },
+          'tDepth': { value: target.depthTexture },
+          'uFogColor': { value: new THREE.Color(configRef.current.colorDeep) },
+          'uDimmingFactor': { value: configRef.current.underwaterDimming },
+          'uTime': { value: 0 },
+          'uCameraNear': { value: camera.near },
+          'uCameraFar': { value: camera.far },
+          'uSplitView': { value: false },
+          'uWaterLevel': { value: 0.5 },
+          'uFogCutoffStart': { value: configRef.current.fogCutoffStart },
+          'uFogCutoffEnd': { value: configRef.current.fogCutoffEnd },
+      },
+      vertexShader: underwaterVertexShader,
+      fragmentShader: underwaterFragmentShader,
+    };
+    const underwaterPass = new ShaderPass(underwaterShader);
+    underwaterPass.enabled = false;
+    composer.addPass(underwaterPass);
+    underwaterPassRef.current = underwaterPass;
+
+    const waterDropShader = {
+      uniforms: {
+          'tDiffuse': { value: null },
+          'uTime': { value: 0 },
+      },
+      vertexShader: waterDropVertexShader,
+      fragmentShader: waterDropFragmentShader,
+    };
+    const waterDropPass = new ShaderPass(waterDropShader);
+    waterDropPass.enabled = false;
+    composer.addPass(waterDropPass);
+    waterDropPassRef.current = waterDropPass;
 
     // --- GOD RAYS SETUP ---
     const rayGeo = new THREE.ConeGeometry(20, 150, 32, 1, true); 
@@ -267,7 +334,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
     simScene.add(new THREE.Mesh(simGeometry, simMaterial));
 
     // --- 1. SEABED ---
-    const bedGeo = new THREE.PlaneGeometry(1000, 1000, 256, 256);
+    const bedGeo = new THREE.PlaneGeometry(4000, 4000, 256, 256);
     bedGeo.rotateX(-Math.PI / 2);
     const bedMat = new THREE.ShaderMaterial({
         vertexShader: terrainVertexShader,
@@ -277,7 +344,6 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             uColorDeep: { value: new THREE.Color(configRef.current.colorDeep) },
             uColorShallow: { value: new THREE.Color(configRef.current.colorShallow) },
             uLightIntensity: { value: configRef.current.underwaterLightIntensity },
-            uFogDensity: { value: configRef.current.underwaterFogDensity },
             tSand: { value: sandTextureRef.current }
         }
     });
@@ -287,7 +353,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
     scene.add(seabed);
 
     // --- 2. WATER SURFACE ---
-    const waterGeo = new THREE.PlaneGeometry(1000, 1000, 256, 256);
+    const waterGeo = new THREE.PlaneGeometry(4000, 4000, 256, 256);
     waterGeo.rotateX(-Math.PI / 2);
     const waterMat = new THREE.ShaderMaterial({
         vertexShader: waterVertexShader,
@@ -303,7 +369,6 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             uWaveHeight: { value: configRef.current.waveHeight },
             uWaveSpeed: { value: configRef.current.waveSpeed },
             uWaveScale: { value: configRef.current.waveScale },
-            uFogDensity: { value: configRef.current.underwaterFogDensity },
             uNormalFlatness: { value: configRef.current.normalFlatness },
             uIOR: { value: configRef.current.ior },
             tRipple: { value: null },
@@ -326,8 +391,9 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
         const renderer = rendererRef.current;
         const scene = sceneRef.current;
         const camera = cameraRef.current;
+        const composer = composerRef.current;
 
-        if (!renderer || !scene || !camera) {
+        if (!renderer || !scene || !camera || !composer) {
             frameIdRef.current = requestAnimationFrame(animate);
             return;
         }
@@ -352,25 +418,70 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             if(mat instanceof THREE.ShaderMaterial && mat.uniforms.uTime) mat.uniforms.uTime.value = time;
         });
 
+        if (underwaterPassRef.current) {
+            underwaterPassRef.current.uniforms.uTime.value = time;
+        }
+
         // --- CAMERA & ENVIRONMENT LOGIC (PER-FRAME) ---
         const camY = camera.position.y;
         const waveApprox = Math.sin(camera.position.x * 0.1 * currentConfig.waveScale + time * currentConfig.waveSpeed) * currentConfig.waveHeight;
         isUnderwater.current = camY < (waveApprox);
 
-        if (isUnderwater.current) {
-            // UNDERWATER STATE
-            scene.background = new THREE.Color(currentConfig.colorDeep);
-            scene.environment = null;
-            scene.fog = new THREE.FogExp2(currentConfig.colorDeep, currentConfig.underwaterFogDensity * 0.3);
+        // --- LENS DROP EFFECT TRIGGER ---
+        if (prevIsUnderwater.current && !isUnderwater.current) {
+            emergeTimeRef.current = clock.getElapsedTime();
+            if(waterDropPassRef.current) waterDropPassRef.current.enabled = true;
+        }
+        prevIsUnderwater.current = isUnderwater.current;
+
+        if (waterDropPassRef.current?.enabled) {
+            const timeSinceEmerge = clock.getElapsedTime() - emergeTimeRef.current;
+            waterDropPassRef.current.uniforms.uTime.value = timeSinceEmerge;
             
-            if(raysGroupRef.current) {
-                raysGroupRef.current.visible = true;
-                const snapSize = 20;
-                raysGroupRef.current.position.x = Math.round(camera.position.x / snapSize) * snapSize;
-                raysGroupRef.current.position.z = Math.round(camera.position.z / snapSize) * snapSize;
+            // Disable after 2 seconds
+            if (timeSinceEmerge > 2.0) {
+                waterDropPassRef.current.enabled = false;
             }
-            if(bubblesRef.current) {
-                bubblesRef.current.visible = true;
+        }
+
+        // Update post-processing pass
+        if (isSplitView) {
+            underwaterPassRef.current.enabled = true;
+            underwaterPassRef.current.uniforms.uSplitView.value = true;
+            
+            if (skyTextureRef.current && envMapRef.current) {
+                scene.background = skyTextureRef.current;
+                scene.environment = envMapRef.current;
+            }
+            if(raysGroupRef.current) raysGroupRef.current.visible = true;
+            if(bubblesRef.current) bubblesRef.current.visible = true;
+
+        } else {
+            underwaterPassRef.current.uniforms.uSplitView.value = false;
+            underwaterPassRef.current.enabled = isUnderwater.current;
+
+            if (isUnderwater.current) {
+                // UNDERWATER STATE
+                scene.background = new THREE.Color(currentConfig.colorDeep);
+                scene.environment = null;
+                if(raysGroupRef.current) raysGroupRef.current.visible = true;
+                if(bubblesRef.current) bubblesRef.current.visible = true;
+            } else {
+                // SURFACE STATE
+                if (skyTextureRef.current && envMapRef.current) {
+                    scene.background = skyTextureRef.current;
+                    scene.environment = envMapRef.current;
+                } else {
+                    scene.background = new THREE.Color(0x101015); 
+                    scene.environment = null;
+                }
+                if(raysGroupRef.current) raysGroupRef.current.visible = false;
+                if(bubblesRef.current) bubblesRef.current.visible = false;
+            }
+        }
+        
+        if (isUnderwater.current || isSplitView) {
+             if(bubblesRef.current) {
                 const positions = bubblesRef.current.geometry.attributes.position;
                 const velocities = bubblesRef.current.geometry.attributes.velocity;
                 const bubbleCount = positions.count;
@@ -388,23 +499,15 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
                 }
                 positions.needsUpdate = true;
             }
-        } else {
-            // SURFACE STATE
-            if (skyTextureRef.current && envMapRef.current) {
-                scene.background = skyTextureRef.current;
-                scene.environment = envMapRef.current;
-            } else {
-                scene.background = new THREE.Color(0x101015); 
-                scene.environment = null;
+            if(raysGroupRef.current) {
+                const snapSize = 20;
+                raysGroupRef.current.position.x = Math.round(camera.position.x / snapSize) * snapSize;
+                raysGroupRef.current.position.z = Math.round(camera.position.z / snapSize) * snapSize;
             }
-            scene.fog = new THREE.FogExp2(new THREE.Color(currentConfig.colorShallow).lerp(new THREE.Color(0xffffff), 0.4), 0.0015);
-            
-            if(raysGroupRef.current) raysGroupRef.current.visible = false;
-            if(bubblesRef.current) bubblesRef.current.visible = false;
         }
 
         controlsRef.current?.update();
-        renderer.render(scene, camera);
+        composer.render();
         frameIdRef.current = requestAnimationFrame(animate);
     };
     animate();
@@ -414,6 +517,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
         const w = containerRef.current.clientWidth;
         const h = containerRef.current.clientHeight;
         rendererRef.current.setSize(w, h);
+        composerRef.current?.setSize(w, h);
         cameraRef.current.aspect = w / h;
         cameraRef.current.updateProjectionMatrix();
     };
@@ -433,8 +537,8 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
         const intersection = raycaster.current.ray.intersectPlane(interactionPlane.current, target);
         
         if (intersection) {
-            const u = (target.x + 500) / 1000;
-            const vCorrected = ( -target.z + 500 ) / 1000;
+            const u = (target.x + 2000) / 4000;
+            const vCorrected = ( -target.z + 2000 ) / 4000;
 
             if (simMaterialRef.current) {
                 simMaterialRef.current.uniforms.uMouse.value.set(u, vCorrected);
@@ -468,6 +572,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
         }
         renderTargetA.current?.dispose();
         renderTargetB.current?.dispose();
+        target.dispose();
         
         // Clean up textures and generators
         pmremGeneratorRef.current?.dispose();
@@ -478,6 +583,35 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
         if (rendererRef.current) rendererRef.current.dispose();
     };
   }, []); 
+
+  // --- Split View Camera Control ---
+  useEffect(() => {
+    const controls = controlsRef.current;
+    const camera = cameraRef.current;
+    if (!controls || !camera) return;
+
+    if (isSplitView) {
+        if (!lastCameraState.current) {
+            lastCameraState.current = {
+                position: camera.position.clone(),
+                target: controls.target.clone(),
+            };
+        }
+        camera.position.set(0, 0, 80);
+        controls.target.set(0, 0, 0);
+        controls.minPolarAngle = Math.PI / 2;
+        controls.maxPolarAngle = Math.PI / 2;
+    } else {
+        if (lastCameraState.current) {
+            camera.position.copy(lastCameraState.current.position);
+            controls.target.copy(lastCameraState.current.target);
+            lastCameraState.current = null;
+        }
+        controls.minPolarAngle = 0;
+        controls.maxPolarAngle = Math.PI;
+    }
+    controls.update();
+  }, [isSplitView]);
 
   // --- Environment Loading ---
   useEffect(() => {
@@ -520,8 +654,15 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
     const deep = new THREE.Color(config.colorDeep);
     const shallow = new THREE.Color(config.colorShallow);
     
+    // Update Post-Processing
+    if (underwaterPassRef.current) {
+      underwaterPassRef.current.uniforms.uFogColor.value.copy(deep);
+      underwaterPassRef.current.uniforms.uDimmingFactor.value = config.underwaterDimming;
+      underwaterPassRef.current.uniforms.uFogCutoffStart.value = config.fogCutoffStart;
+      underwaterPassRef.current.uniforms.uFogCutoffEnd.value = config.fogCutoffEnd;
+    }
+    
     // Update Main Shaders
-    // FIX: Replaced forEach with a for...of loop to help TypeScript with type narrowing.
     for (const mat of materialsRef.current) {
         if (mat instanceof THREE.ShaderMaterial) {
             if(mat.uniforms.uColorDeep) mat.uniforms.uColorDeep.value.copy(deep);
@@ -533,7 +674,6 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             if(mat.uniforms.uWaveScale) mat.uniforms.uWaveScale.value = config.waveScale;
             if(mat.uniforms.uLightIntensity) mat.uniforms.uLightIntensity.value = config.underwaterLightIntensity;
             if(mat.uniforms.uSunIntensity) mat.uniforms.uSunIntensity.value = config.sunIntensity;
-            if(mat.uniforms.uFogDensity) mat.uniforms.uFogDensity.value = config.underwaterFogDensity;
             if(mat.uniforms.uRippleIntensity) mat.uniforms.uRippleIntensity.value = config.rippleIntensity;
             if(mat.uniforms.uRippleNormalIntensity) mat.uniforms.uRippleNormalIntensity.value = config.rippleNormalIntensity;
             if(mat.uniforms.uNormalFlatness) mat.uniforms.uNormalFlatness.value = config.normalFlatness;

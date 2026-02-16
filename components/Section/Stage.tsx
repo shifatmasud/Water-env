@@ -1,4 +1,5 @@
 
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -13,11 +14,13 @@ import { SceneController } from '../App/MetaPrototype.tsx';
 interface StageProps {
   waterConfig: WaterConfig;
   sceneController: React.MutableRefObject<Partial<SceneController>>;
+  isSplitView: boolean;
 }
 
 const Stage: React.FC<StageProps> = ({ 
     waterConfig,
     sceneController,
+    isSplitView,
 }) => {
   return (
     <div style={{ 
@@ -38,7 +41,7 @@ const Stage: React.FC<StageProps> = ({
             } as any)}
             style={{ position: 'absolute', width: '100%', height: '100%' }}
         >
-            <WaterScene config={waterConfig} sceneController={sceneController} />
+            <WaterScene config={waterConfig} sceneController={sceneController} isSplitView={isSplitView} />
         </motion.div>
     </div>
   );

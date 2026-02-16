@@ -1,5 +1,9 @@
 
 
+
+
+
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -11,13 +15,17 @@ import { WaterConfig } from '../../../types/index.tsx';
 import RangeSlider from '../../Core/RangeSlider.tsx';
 import ColorPicker from '../../Core/ColorPicker.tsx';
 import Select from '../../Core/Select.tsx';
-import { skyboxOptions } from '../../../environments.ts';
+import type { SkyboxOption } from '../../../environments.ts';
 import Button from '../../Core/Button.tsx';
 
 interface WaterSimulationPanelProps {
   waterConfig: WaterConfig;
   onWaterPropChange: (updates: Partial<WaterConfig>) => void;
   onSyncFromSky: () => void;
+  isSplitView: boolean;
+  onToggleSplitView: () => void;
+  skyboxOptions: SkyboxOption[];
+  onHdrUpload: (file: File) => void;
 }
 
 // Helper for local motion values to use RangeSlider
@@ -48,8 +56,20 @@ const LocalRange: React.FC<{
   );
 };
 
-export const WaterSimulation: React.FC<WaterSimulationPanelProps> = ({ waterConfig, onWaterPropChange, onSyncFromSky }) => {
+export const WaterSimulation: React.FC<WaterSimulationPanelProps> = ({ waterConfig, onWaterPropChange, onSyncFromSky, isSplitView, onToggleSplitView, skyboxOptions, onHdrUpload }) => {
   const { theme } = useTheme();
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      onHdrUpload(file);
+    }
+  };
   
   const selectOptions = skyboxOptions.map(opt => ({ value: opt.url, label: opt.name }));
 
@@ -60,13 +80,36 @@ export const WaterSimulation: React.FC<WaterSimulationPanelProps> = ({ waterConf
       </label>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing['Space.M'] }}>
-         <Button
-            label="Sync Colors from Sky"
-            onClick={onSyncFromSky}
-            variant="secondary"
-            size="S"
-            icon="ph-sparkle"
+         <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            accept=".hdr,image/vnd.radiance"
+            onChange={handleFileChange}
          />
+         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: theme.spacing['Space.S']}}>
+            <Button
+                label="Sync Colors"
+                onClick={onSyncFromSky}
+                variant="secondary"
+                size="S"
+                icon="ph-sparkle"
+            />
+            <Button
+                label="Split View"
+                onClick={onToggleSplitView}
+                variant={isSplitView ? 'primary' : 'secondary'}
+                size="S"
+                icon="ph-rows"
+            />
+            <Button
+                label="Upload"
+                onClick={handleUploadClick}
+                variant="secondary"
+                size="S"
+                icon="ph-upload-simple"
+            />
+         </div>
          <Select
             label="Environment"
             value={waterConfig.skyboxUrl}
@@ -88,6 +131,9 @@ export const WaterSimulation: React.FC<WaterSimulationPanelProps> = ({ waterConf
          <LocalRange label="Scale" value={waterConfig.waveScale * 10} min={1} max={100} onChange={(v) => onWaterPropChange({ waveScale: v / 10 })} />
          <LocalRange label="Roughness" value={waterConfig.roughness * 100} min={0} max={100} onChange={(v) => onWaterPropChange({ roughness: v / 100 })} />
          <LocalRange label="Normal Flatness" value={waterConfig.normalFlatness} min={1} max={100} onChange={(v) => onWaterPropChange({ normalFlatness: v })} />
+         <LocalRange label="Dimming" value={waterConfig.underwaterDimming * 100} min={0} max={100} onChange={(v) => onWaterPropChange({ underwaterDimming: v / 100 })} />
+         <LocalRange label="Fog Start" value={waterConfig.fogCutoffStart} min={10} max={500} onChange={(v) => onWaterPropChange({ fogCutoffStart: v })} />
+         <LocalRange label="Fog End" value={waterConfig.fogCutoffEnd} min={50} max={1000} onChange={(v) => onWaterPropChange({ fogCutoffEnd: v })} />
       </div>
     </>
   );
