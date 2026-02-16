@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import React, { useRef, useEffect, useState } from 'react';
-import { type MotionValue, animate, useMotionValue } from 'framer-motion';
+// FIX: The `MotionValue` type is not exported correctly by the framer-motion CDN module, causing a build error.
+// It has been removed from the import. The `motionValue` prop is already typed as `any`.
+import { animate, useMotionValue } from 'framer-motion';
 import { useTheme } from '../../Theme.tsx';
 
 interface RangeSliderProps {

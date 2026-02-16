@@ -101,6 +101,7 @@ export const WaterSimulation: React.FC<WaterSimulationPanelProps> = ({ waterConf
                 variant={isSplitView ? 'primary' : 'secondary'}
                 size="S"
                 icon="ph-rows"
+                disabled={true}
             />
             <Button
                 label="Upload"

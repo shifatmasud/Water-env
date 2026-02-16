@@ -2,6 +2,8 @@
 
 
 
+
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -20,7 +22,6 @@ import { waterDropVertexShader, waterDropFragmentShader } from './shaders/waterD
 import { rippleVertexShader, rippleFragmentShader } from './shaders/ripple.ts';
 import { waterVertexShader, waterFragmentShader } from './shaders/water.ts';
 import { terrainVertexShader, terrainFragmentShader } from './shaders/terrain.ts';
-import { underwaterVertexShader, underwaterFragmentShader } from './shaders/underwater.ts';
 import { SceneController } from '../../App/MetaPrototype.tsx';
 
 
@@ -119,7 +120,6 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
   
   // --- POST-PROCESSING REFS ---
   const composerRef = useRef<EffectComposer | null>(null);
-  const underwaterPassRef = useRef<ShaderPass | null>(null);
   const waterDropPassRef = useRef<ShaderPass | null>(null);
   const emergeTimeRef = useRef<number>(-1);
   const prevIsUnderwater = useRef<boolean>(false);
@@ -184,36 +184,11 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
       format: THREE.RGBAFormat,
       stencilBuffer: false
     });
-    target.depthTexture = new THREE.DepthTexture(width, height);
-    target.depthTexture.format = THREE.DepthFormat;
-    target.depthTexture.type = THREE.UnsignedShortType;
 
     const composer = new EffectComposer(renderer, target);
     composer.setSize(width, height);
     composerRef.current = composer;
     composer.addPass(new RenderPass(scene, camera));
-
-    const underwaterShader = {
-      uniforms: {
-          'tDiffuse': { value: null },
-          'tDepth': { value: target.depthTexture },
-          'uFogColor': { value: new THREE.Color(configRef.current.colorDeep) },
-          'uDimmingFactor': { value: configRef.current.underwaterDimming },
-          'uTime': { value: 0 },
-          'uCameraNear': { value: camera.near },
-          'uCameraFar': { value: camera.far },
-          'uSplitView': { value: false },
-          'uWaterLevel': { value: 0.5 },
-          'uFogCutoffStart': { value: configRef.current.fogCutoffStart },
-          'uFogCutoffEnd': { value: configRef.current.fogCutoffEnd },
-      },
-      vertexShader: underwaterVertexShader,
-      fragmentShader: underwaterFragmentShader,
-    };
-    const underwaterPass = new ShaderPass(underwaterShader);
-    underwaterPass.enabled = false;
-    composer.addPass(underwaterPass);
-    underwaterPassRef.current = underwaterPass;
 
     const waterDropShader = {
       uniforms: {
@@ -418,10 +393,6 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             if(mat instanceof THREE.ShaderMaterial && mat.uniforms.uTime) mat.uniforms.uTime.value = time;
         });
 
-        if (underwaterPassRef.current) {
-            underwaterPassRef.current.uniforms.uTime.value = time;
-        }
-
         // --- CAMERA & ENVIRONMENT LOGIC (PER-FRAME) ---
         const camY = camera.position.y;
         const waveApprox = Math.sin(camera.position.x * 0.1 * currentConfig.waveScale + time * currentConfig.waveSpeed) * currentConfig.waveHeight;
@@ -444,40 +415,32 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             }
         }
 
-        // Update post-processing pass
-        if (isSplitView) {
-            underwaterPassRef.current.enabled = true;
-            underwaterPassRef.current.uniforms.uSplitView.value = true;
-            
+        // Update underwater state
+        if (isUnderwater.current) {
+            // UNDERWATER STATE
+            scene.background = new THREE.Color(currentConfig.colorDeep);
+            if (!scene.fog) { // create fog if it doesn't exist
+                scene.fog = new THREE.Fog(currentConfig.colorDeep, currentConfig.fogCutoffStart, currentConfig.fogCutoffEnd);
+            } else { // update existing fog
+                scene.fog.color.set(currentConfig.colorDeep);
+                scene.fog.near = currentConfig.fogCutoffStart;
+                scene.fog.far = currentConfig.fogCutoffEnd;
+            }
+            scene.environment = null;
+            if(raysGroupRef.current) raysGroupRef.current.visible = true;
+            if(bubblesRef.current) bubblesRef.current.visible = true;
+        } else {
+            // SURFACE STATE
             if (skyTextureRef.current && envMapRef.current) {
                 scene.background = skyTextureRef.current;
                 scene.environment = envMapRef.current;
-            }
-            if(raysGroupRef.current) raysGroupRef.current.visible = true;
-            if(bubblesRef.current) bubblesRef.current.visible = true;
-
-        } else {
-            underwaterPassRef.current.uniforms.uSplitView.value = false;
-            underwaterPassRef.current.enabled = isUnderwater.current;
-
-            if (isUnderwater.current) {
-                // UNDERWATER STATE
-                scene.background = new THREE.Color(currentConfig.colorDeep);
-                scene.environment = null;
-                if(raysGroupRef.current) raysGroupRef.current.visible = true;
-                if(bubblesRef.current) bubblesRef.current.visible = true;
             } else {
-                // SURFACE STATE
-                if (skyTextureRef.current && envMapRef.current) {
-                    scene.background = skyTextureRef.current;
-                    scene.environment = envMapRef.current;
-                } else {
-                    scene.background = new THREE.Color(0x101015); 
-                    scene.environment = null;
-                }
-                if(raysGroupRef.current) raysGroupRef.current.visible = false;
-                if(bubblesRef.current) bubblesRef.current.visible = false;
+                scene.background = new THREE.Color(0x101015); 
+                scene.environment = null;
             }
+            scene.fog = null;
+            if(raysGroupRef.current) raysGroupRef.current.visible = false;
+            if(bubblesRef.current) bubblesRef.current.visible = false;
         }
         
         if (isUnderwater.current || isSplitView) {
@@ -653,14 +616,6 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
   useEffect(() => {
     const deep = new THREE.Color(config.colorDeep);
     const shallow = new THREE.Color(config.colorShallow);
-    
-    // Update Post-Processing
-    if (underwaterPassRef.current) {
-      underwaterPassRef.current.uniforms.uFogColor.value.copy(deep);
-      underwaterPassRef.current.uniforms.uDimmingFactor.value = config.underwaterDimming;
-      underwaterPassRef.current.uniforms.uFogCutoffStart.value = config.fogCutoffStart;
-      underwaterPassRef.current.uniforms.uFogCutoffEnd.value = config.fogCutoffEnd;
-    }
     
     // Update Main Shaders
     for (const mat of materialsRef.current) {
