@@ -1,9 +1,3 @@
-
-
-
-
-
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -32,9 +26,9 @@ export interface SceneController {
 }
 
 const getInitialWindowState = (): Record<WindowId, WindowState> => ({
-  control: { id: 'control', title: 'Controls', isOpen: true, zIndex: 10, x: -220, y: -150 },
-  code: { id: 'code', title: 'Code', isOpen: false, zIndex: 9, x: 220, y: -100 },
-  console: { id: 'console', title: 'Console', isOpen: false, zIndex: 8, x: -220, y: 100 },
+  control: { id: 'control', title: 'Controls', isOpen: true, zIndex: 10, x: 0, y: 0 },
+  code: { id: 'code', title: 'Code', isOpen: false, zIndex: 10, x: 0, y: 0 },
+  console: { id: 'console', title: 'Console', isOpen: false, zIndex: 10, x: 0, y: 0 },
 });
 
 /**
