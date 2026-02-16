@@ -71,16 +71,19 @@ void main() {
 `;
 
 export const waterFragmentShader = `
+${commonShaderUtils}
 uniform vec3 uColorDeep;
 uniform vec3 uColorShallow;
 uniform vec3 uSunPosition;
 uniform float uTransparency;
 uniform float uRoughness;
 uniform float uSunIntensity;
-uniform float uFogDensity;
+uniform float uFogNear;
+uniform float uFogFar;
 uniform float uNormalFlatness;
 uniform float uIOR;
 uniform sampler2D tSky;
+uniform float uTime;
 
 varying vec3 vWorldPos;
 varying vec3 vViewPosition;
@@ -130,44 +133,39 @@ void main() {
         gl_FragColor = vec4(finalColor, uTransparency);
     } else {
         // --- UNDERWATER (Looking Up) ---
-        // Snell's Window & Total Internal Reflection
+        vec3 I = viewDir;
+        vec3 N = faceNormal;
+        float eta = 1.0 / uIOR; // Water to Air
+
+        vec3 refractedDir = refract(I, N, eta);
         
-        // Incident vector I (ViewDir points Camera -> Surface)
-        vec3 I = viewDir; 
+        float R0 = pow((1.0 - uIOR) / (1.0 + uIOR), 2.0);
+        float cosTheta = max(0.0, dot(I, N));
+        float fresnelFactor = R0 + (1.0 - R0) * pow(1.0 - cosTheta, 5.0);
         
-        // Refraction Ratio: Water (1.33) -> Air (1.0)
-        float eta = 1.0 / uIOR;
-
-        // Calculate refraction vector
-        vec3 R = refract(I, faceNormal, eta);
-
-        // Distance from camera to surface fragment
-        float dist = length(vViewPosition);
-
-        if (length(R) == 0.0) {
-            // Total Internal Reflection (TIR) - Mirror the deep
-            // Reflect the deep color (dark blue/abyss)
-            finalColor = uColorDeep;
+        vec3 refractedColor;
+        if (length(refractedDir) > 0.0) {
+            refractedColor = getSkyColor(refractedDir);
         } else {
-            // Snell's Window - We see the sky!
-            vec3 skyColor = getSkyColor(R);
-            
-            // BEER'S LAW: Absorb light as it travels through water
-            float absorbance = exp(-dist * 0.02); 
-            skyColor *= absorbance;
-            
-            finalColor = skyColor;
+            refractedColor = vec3(0.0);
         }
 
-        // Tint the view heavily with shallow color near surface
-        finalColor = mix(finalColor, uColorShallow, 0.4);
+        vec3 reflectedDir = reflect(-I, N);
+        float noise = fbm(vWorldPos.xz * 0.05 + reflectedDir.xz * 0.1 + uTime * 0.1, 3, 0.5, 2.0);
+        vec3 reflectedColor = mix(uColorDeep, uColorShallow, 0.3 + noise * 0.3);
+        
+        float k = 1.0 - eta * eta * (1.0 - cosTheta * cosTheta);
+        float finalFresnel = k < 0.0 ? 1.0 : fresnelFactor;
 
-        // Stronger Underwater Fog (Distance based)
-        float fogFactor = 1.0 - exp( -dist * uFogDensity * 0.15 ); 
-        finalColor = mix(finalColor, uColorDeep, fogFactor);
+        finalColor = mix(refractedColor, reflectedColor, finalFresnel);
+        
+        float dist = length(vViewPosition);
+        
+        // Apply fog
+        vec3 fogColor = uColorDeep;
+        float fogFactor = smoothstep(uFogNear, uFogFar, dist);
+        finalColor = mix(finalColor, fogColor, fogFactor);
 
-        // Set alpha to 1.0 to behave like a solid volume boundary when inside
-        gl_FragColor = vec4(finalColor, 1.0); 
+        gl_FragColor = vec4(finalColor, 1.0);
     }
 }
-`;

@@ -1,4 +1,5 @@
 
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -46,7 +47,8 @@ uniform float uTime;
 uniform vec3 uColorDeep;
 uniform vec3 uColorShallow;
 uniform float uLightIntensity;
-uniform float uFogDensity;
+uniform float uFogNear;
+uniform float uFogFar;
 uniform sampler2D tSand; // Generated Noise Texture
 
 varying vec2 vUv;
@@ -138,8 +140,7 @@ void main() {
 
     // Horizontal Fog
     float dist = length(vViewPosition);
-    // Reduced fog intensity significantly for ground (0.1 -> 0.03)
-    float fogFactor = 1.0 - exp(-dist * uFogDensity * 0.03);
+    float fogFactor = smoothstep(uFogNear, uFogFar, dist);
     
     vec3 finalColor = mix(absorbedAlbedo, uColorDeep, fogFactor);
     
@@ -153,4 +154,3 @@ void main() {
 
     gl_FragColor = vec4(finalColor, 1.0);
 }
-`;

@@ -57,14 +57,15 @@ const MetaPrototype = () => {
     skyboxUrl: skyboxOptions[0].url,
     sunIntensity: 1.2,
     colorShallow: '#41737c',
-    colorDeep: '#7aa8d6',
+    colorDeep: '#0b1a32',
     transparency: 0.65,
     roughness: 0.1,
     waveHeight: 0.15,
     waveSpeed: 0.108,
     waveScale: 0.7223,
     normalFlatness: 50,
-    underwaterFogDensity: 0.15,
+    underwaterFogNear: 1.0,
+    underwaterFogFar: 150.0,
     underwaterLightIntensity: 2.0,
     ior: 1.33,
     rippleDamping: 0.98,
@@ -79,7 +80,7 @@ const MetaPrototype = () => {
     if (palette) {
       setWaterConfig(prev => ({
         ...prev,
-        colorDeep: palette.colorDeep,
+        // colorDeep is now constant to maintain underwater mood
         colorShallow: palette.colorShallow,
       }));
       addLog(`🎨 Scene colors synced from environment.`);
@@ -89,7 +90,8 @@ const MetaPrototype = () => {
   // -- Window Management --
   const bringToFront = (id: WindowId) => {
     setWindows(prev => {
-      const maxZ = Math.max(...Object.values(prev).map(w => w.zIndex));
+      // FIX: Explicitly type `w` as `WindowState` to resolve a TypeScript type inference issue.
+      const maxZ = Math.max(...Object.values(prev).map((w: WindowState) => w.zIndex));
       if (prev[id].zIndex === maxZ) return prev; // Already in front
       return {
         ...prev,

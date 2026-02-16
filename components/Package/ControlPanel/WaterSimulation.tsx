@@ -88,6 +88,8 @@ export const WaterSimulation: React.FC<WaterSimulationPanelProps> = ({ waterConf
          <LocalRange label="Scale" value={waterConfig.waveScale * 10} min={1} max={100} onChange={(v) => onWaterPropChange({ waveScale: v / 10 })} />
          <LocalRange label="Roughness" value={waterConfig.roughness * 100} min={0} max={100} onChange={(v) => onWaterPropChange({ roughness: v / 100 })} />
          <LocalRange label="Normal Flatness" value={waterConfig.normalFlatness} min={1} max={100} onChange={(v) => onWaterPropChange({ normalFlatness: v })} />
+         <LocalRange label="Fog Near" value={waterConfig.underwaterFogNear} min={0} max={100} onChange={(v) => onWaterPropChange({ underwaterFogNear: v })} />
+         <LocalRange label="Fog Far" value={waterConfig.underwaterFogFar} min={1} max={300} onChange={(v) => onWaterPropChange({ underwaterFogFar: v })} />
       </div>
     </>
   );
