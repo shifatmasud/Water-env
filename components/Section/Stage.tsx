@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -7,13 +8,16 @@ import { WaterConfig } from '../../types/index.tsx';
 // FIX: Corrected the import path for the WaterScene component.
 import WaterScene from '../Core/WaterScene/index.tsx';
 import { motion } from 'framer-motion';
+import { SceneController } from '../App/MetaPrototype.tsx';
 
 interface StageProps {
   waterConfig: WaterConfig;
+  sceneController: React.MutableRefObject<Partial<SceneController>>;
 }
 
 const Stage: React.FC<StageProps> = ({ 
     waterConfig,
+    sceneController,
 }) => {
   return (
     <div style={{ 
@@ -34,7 +38,7 @@ const Stage: React.FC<StageProps> = ({
             } as any)}
             style={{ position: 'absolute', width: '100%', height: '100%' }}
         >
-            <WaterScene config={waterConfig} />
+            <WaterScene config={waterConfig} sceneController={sceneController} />
         </motion.div>
     </div>
   );

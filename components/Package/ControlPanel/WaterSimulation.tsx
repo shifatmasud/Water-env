@@ -1,4 +1,5 @@
 
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -9,10 +10,14 @@ import { useTheme } from '../../../Theme.tsx';
 import { WaterConfig } from '../../../types/index.tsx';
 import RangeSlider from '../../Core/RangeSlider.tsx';
 import ColorPicker from '../../Core/ColorPicker.tsx';
+import Select from '../../Core/Select.tsx';
+import { skyboxOptions } from '../../../environments.ts';
+import Button from '../../Core/Button.tsx';
 
 interface WaterSimulationPanelProps {
   waterConfig: WaterConfig;
   onWaterPropChange: (updates: Partial<WaterConfig>) => void;
+  onSyncFromSky: () => void;
 }
 
 // Helper for local motion values to use RangeSlider
@@ -43,8 +48,10 @@ const LocalRange: React.FC<{
   );
 };
 
-export const WaterSimulation: React.FC<WaterSimulationPanelProps> = ({ waterConfig, onWaterPropChange }) => {
+export const WaterSimulation: React.FC<WaterSimulationPanelProps> = ({ waterConfig, onWaterPropChange, onSyncFromSky }) => {
   const { theme } = useTheme();
+  
+  const selectOptions = skyboxOptions.map(opt => ({ value: opt.url, label: opt.name }));
 
   return (
     <>
@@ -53,22 +60,28 @@ export const WaterSimulation: React.FC<WaterSimulationPanelProps> = ({ waterConf
       </label>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing['Space.M'] }}>
-         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <ColorPicker
-                label="Deep"
-                value={waterConfig.colorDeep}
-                onChange={(e) => onWaterPropChange({ colorDeep: e.target.value })}
-            />
-            <ColorPicker
-                label="Shallow"
-                value={waterConfig.colorShallow}
-                onChange={(e) => onWaterPropChange({ colorShallow: e.target.value })}
-            />
-         </div>
+         <Button
+            label="Sync Colors from Sky"
+            onClick={onSyncFromSky}
+            variant="secondary"
+            size="S"
+            icon="ph-sparkle"
+         />
+         <Select
+            label="Environment"
+            value={waterConfig.skyboxUrl}
+            onChange={(e) => onWaterPropChange({ skyboxUrl: e.target.value })}
+            options={selectOptions}
+         />
          <ColorPicker
-            label="Foam"
-            value={waterConfig.foamColor}
-            onChange={(e) => onWaterPropChange({ foamColor: e.target.value })}
+            label="Deep"
+            value={waterConfig.colorDeep}
+            onChange={(e) => onWaterPropChange({ colorDeep: e.target.value })}
+         />
+         <ColorPicker
+            label="Shallow"
+            value={waterConfig.colorShallow}
+            onChange={(e) => onWaterPropChange({ colorShallow: e.target.value })}
          />
          <LocalRange label="Wave Height" value={waterConfig.waveHeight * 10} min={0} max={50} onChange={(v) => onWaterPropChange({ waveHeight: v / 10 })} />
          <LocalRange label="Wave Speed" value={waterConfig.waveSpeed * 100} min={0} max={100} onChange={(v) => onWaterPropChange({ waveSpeed: v / 100 })} />

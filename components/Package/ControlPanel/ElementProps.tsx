@@ -1,4 +1,5 @@
 
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -31,8 +32,7 @@ export const ElementProps: React.FC<ElementPropsPanelProps> = ({ btnProps, onPro
         value={btnProps.label}
         onChange={(e) => onPropChange('label', e.target.value)}
       />
-      <div style={{ display: 'flex', gap: theme.spacing['Space.M'], marginTop: theme.spacing['Space.L'] }}>
-        <div style={{ flex: 1 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing['Space.M'], marginTop: theme.spacing['Space.L'] }}>
           <Select
             label="Variant"
             value={btnProps.variant}
@@ -44,8 +44,6 @@ export const ElementProps: React.FC<ElementPropsPanelProps> = ({ btnProps, onPro
               { value: 'outline', label: 'Outline' },
             ]}
           />
-        </div>
-        <div style={{ flex: 1 }}>
           <Select
             label="Size"
             value={btnProps.size}
@@ -56,7 +54,6 @@ export const ElementProps: React.FC<ElementPropsPanelProps> = ({ btnProps, onPro
               { value: 'L', label: 'Large (L)' },
             ]}
           />
-        </div>
       </div>
       <div style={{ marginTop: theme.spacing['Space.L'] }}>
           <Select

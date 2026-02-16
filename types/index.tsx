@@ -1,4 +1,5 @@
 
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -43,11 +44,13 @@ export interface MetaButtonProps {
 
 // --- Water Simulation Props ---
 export interface WaterConfig {
+  // Environment
+  skyboxUrl: string;
+
   // Visuals
   sunIntensity: number; // 0-5
   colorShallow: string;
   colorDeep: string;
-  foamColor: string;
   transparency: number; // 0-1
   roughness: number; // 0-1
   waveHeight: number; // 0-5

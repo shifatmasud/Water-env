@@ -1,4 +1,5 @@
 
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -106,7 +107,7 @@ void main() {
     vec3 faceNormal = normalize(gl_FrontFacing ? normal : -normal);
     
     float NdotV = max(0.0, dot(faceNormal, viewDir));
-    float fresnel = pow(1.0 - NdotV, 3.0); 
+    float fresnel = pow(1.0 - NdotV, 5.0); 
     vec3 finalColor;
 
     if (gl_FrontFacing) {
@@ -123,7 +124,7 @@ void main() {
         float specular = pow(NdotH, 100.0 * (1.0 - uRoughness));
         
         // Mix reflection with water body
-        finalColor = mix(body, reflection, fresnel * 0.8 + 0.2);
+        finalColor = mix(body, reflection, fresnel);
         finalColor += specular * vec3(1.0, 0.95, 0.8) * uSunIntensity;
         
         gl_FragColor = vec4(finalColor, uTransparency);

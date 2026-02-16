@@ -9,7 +9,6 @@
     "three/examples/jsm/controls/OrbitControls.js": "https://esm.sh/three@0.180.0/examples/jsm/controls/OrbitControls.js?external=three",
     "three/examples/jsm/loaders/HDRLoader.js": "https://esm.sh/three@0.180.0/examples/jsm/loaders/HDRLoader.js?external=three",
     "gsap": "https://esm.sh/gsap@3.13.0",
-    "framer-motion": "https://esm.sh/framer-motion@12.23.24?external=react,react-dom",
-    "lil-gui": "https://esm.sh/lil-gui@0.19.1"
+    "framer-motion": "https://esm.sh/framer-motion@12.23.24?external=react,react-dom"
   }
 }

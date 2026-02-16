@@ -1,4 +1,5 @@
 
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -12,22 +13,23 @@ import { InteractionState } from './InteractionState.tsx';
 import { Inspector } from './Inspector.tsx';
 
 interface ControlPanelProps {
-  btnProps: MetaButtonProps;
+  // btnProps: MetaButtonProps;
   waterConfig: WaterConfig;
-  onPropChange: (keyOrObj: string | Partial<MetaButtonProps>, value?: any) => void;
+  // onPropChange: (keyOrObj: string | Partial<MetaButtonProps>, value?: any) => void;
   onWaterPropChange: (updates: Partial<WaterConfig>) => void;
-  radiusMotionValue: any; // Using any for MotionValue<number>
-  onRadiusCommit: (value: number) => void;
-  showMeasurements: boolean;
-  onToggleMeasurements: () => void;
-  showTokens: boolean;
-  onToggleTokens: () => void;
-  // 3D View Props
-  view3D: boolean;
-  onToggleView3D: () => void;
-  layerSpacing: any; // Using any for MotionValue<number>
-  viewRotateX: any;
-  viewRotateZ: any;
+  onSyncFromSky: () => void;
+  // radiusMotionValue: any; // Using any for MotionValue<number>
+  // onRadiusCommit: (value: number) => void;
+  // showMeasurements: boolean;
+  // onToggleMeasurements: () => void;
+  // showTokens: boolean;
+  // onToggleTokens: () => void;
+  // // 3D View Props
+  // view3D: boolean;
+  // onToggleView3D: () => void;
+  // layerSpacing: any; // Using any for MotionValue<number>
+  // viewRotateX: any;
+  // viewRotateZ: any;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = (props) => {
@@ -35,6 +37,7 @@ const ControlPanel: React.FC<ControlPanelProps> = (props) => {
 
   return (
     <>
+      {/* 
       <ElementProps
         btnProps={props.btnProps}
         onPropChange={props.onPropChange}
@@ -43,12 +46,15 @@ const ControlPanel: React.FC<ControlPanelProps> = (props) => {
       />
 
       <div style={{ borderTop: `1px solid ${theme.Color.Base.Surface[3]}`, margin: `${theme.spacing['Space.L']} 0` }} />
-
+      */}
+      
       <WaterSimulation
         waterConfig={props.waterConfig}
         onWaterPropChange={props.onWaterPropChange}
+        onSyncFromSky={props.onSyncFromSky}
       />
-
+      
+      {/*
       <div style={{ borderTop: `1px solid ${theme.Color.Base.Surface[3]}`, margin: `${theme.spacing['Space.L']} 0` }} />
       
       <InteractionState
@@ -69,6 +75,7 @@ const ControlPanel: React.FC<ControlPanelProps> = (props) => {
         viewRotateX={props.viewRotateX}
         viewRotateZ={props.viewRotateZ}
       />
+      */}
     </>
   );
 };

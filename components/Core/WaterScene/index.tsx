@@ -1,3 +1,5 @@
+
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -12,23 +14,78 @@ import { godRayVertexShader, godRayFragmentShader } from './shaders/godray.ts';
 import { rippleVertexShader, rippleFragmentShader } from './shaders/ripple.ts';
 import { waterVertexShader, waterFragmentShader } from './shaders/water.ts';
 import { terrainVertexShader, terrainFragmentShader } from './shaders/terrain.ts';
+import { SceneController } from '../../App/MetaPrototype.tsx';
 
 
 interface WaterSceneProps {
   config: WaterConfig;
   initialCameraState?: { position: [number, number, number], target: [number, number, number] } | null;
+  sceneController?: React.MutableRefObject<Partial<SceneController>>;
 }
 
-const skyboxUrls: Record<string, string> = {
-  'Qwantani Noon': 'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/qwantani_noon_puresky_1k.hdr',
+const extractPaletteFromTexture = (texture: THREE.DataTexture) => {
+  if (!texture || !texture.image) return null;
+
+  const data = texture.image.data; // Float32Array
+  const width = texture.image.width;
+  const height = texture.image.height;
+
+  const samples: THREE.Color[] = [];
+  const sampleCount = 200;
+
+  for (let i = 0; i < sampleCount; i++) {
+      const x = Math.floor(Math.random() * width);
+      const y = Math.floor(Math.random() * height);
+      const idx = (y * width + x) * 3; // RGB format for HDR
+      
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      
+      // Simple Reinhard tone mapping for analysis
+      const toneMappedR = r / (r + 1);
+      const toneMappedG = g / (g + 1);
+      const toneMappedB = b / (b + 1);
+
+      const color = new THREE.Color(toneMappedR, toneMappedG, toneMappedB);
+      // Convert to sRGB for consistent HSL analysis
+      color.convertLinearToSRGB();
+      samples.push(color);
+  }
+
+  // Convert to HSL and sort by luminance
+  const hslSamples = samples.map(c => {
+      const hsl = { h: 0, s: 0, l: 0 };
+      c.getHSL(hsl);
+      return { color: c, hsl };
+  }).sort((a, b) => a.hsl.l - b.hsl.l);
+
+  // Pick colors from luminance percentiles
+  const deepColor = hslSamples[Math.floor(hslSamples.length * 0.25)].color.clone();
+  const shallowColor = hslSamples[Math.floor(hslSamples.length * 0.75)].color.clone();
+
+  // Adjust colors to be more suitable for water
+  const deepHSL = { h: 0, s: 0, l: 0 };
+  deepColor.getHSL(deepHSL);
+  deepColor.setHSL(deepHSL.h, Math.min(1.0, deepHSL.s * 1.3), Math.max(0.1, deepHSL.l * 0.8));
+
+  const shallowHSL = { h: 0, s: 0, l: 0 };
+  shallowColor.getHSL(shallowHSL);
+  shallowColor.setHSL(shallowHSL.h, Math.min(1.0, shallowHSL.s * 1.2), Math.min(0.8, shallowHSL.l * 1.1));
+
+  return {
+      colorDeep: '#' + deepColor.getHexString(),
+      colorShallow: '#' + shallowColor.getHexString(),
+  };
 };
 
-const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) => {
+const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sceneController }) => {
+  // FIX: Corrected typo from HTMLDivDivElement to HTMLDivElement.
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const frameIdRef = useRef<number>(0);
-  const materialsRef = useRef<THREE.ShaderMaterial[]>([]);
+  const materialsRef = useRef<THREE.Material[]>([]);
   const controlsRef = useRef<OrbitControls | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const sandTextureRef = useRef<THREE.Texture | null>(null);
@@ -56,8 +113,9 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) =
   const mouse = useRef(new THREE.Vector2());
   const interactionPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
 
-  // God Rays Refs
+  // God Rays & Bubbles Refs
   const raysGroupRef = useRef<THREE.Group | null>(null);
+  const bubblesRef = useRef<THREE.Points | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -79,6 +137,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) =
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     containerRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
     
@@ -136,9 +195,39 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) =
         ray.rotation.x = (Math.random() - 0.5) * 0.3;
         ray.rotation.z = (Math.random() - 0.5) * 0.3;
         ray.scale.setScalar(0.8 + Math.random() * 1.5);
-        ray.userData = { initialPos: ray.position.clone() };
         raysGroup.add(ray);
     }
+
+    // --- BUBBLES SETUP ---
+    const bubbleCount = 300;
+    const bubblePositions = new Float32Array(bubbleCount * 3);
+    const bubbleVelocities = new Float32Array(bubbleCount * 3);
+    const bubbleGeo = new THREE.BufferGeometry();
+
+    for (let i = 0; i < bubbleCount; i++) {
+        const i3 = i * 3;
+        bubblePositions[i3] = (Math.random() - 0.5) * 400; // x
+        bubblePositions[i3 + 1] = -100 - Math.random() * 200; // y
+        bubblePositions[i3 + 2] = (Math.random() - 0.5) * 400; // z
+
+        bubbleVelocities[i3 + 1] = 0.5 + Math.random() * 1.5; // vy (upwards speed)
+    }
+    bubbleGeo.setAttribute('position', new THREE.BufferAttribute(bubblePositions, 3));
+    bubbleGeo.setAttribute('velocity', new THREE.BufferAttribute(bubbleVelocities, 3));
+
+    const bubbleMat = new THREE.PointsMaterial({
+        size: 0.8,
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.4,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        sizeAttenuation: true
+    });
+    materialsRef.current.push(bubbleMat);
+    const bubbles = new THREE.Points(bubbleGeo, bubbleMat);
+    bubblesRef.current = bubbles;
+    scene.add(bubbles);
 
     // --- RIPPLE SIMULATION SETUP ---
     const simSize = 512;
@@ -260,7 +349,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) =
         }
 
         materialsRef.current.forEach(mat => {
-            if(mat.uniforms.uTime) mat.uniforms.uTime.value = time;
+            if(mat instanceof THREE.ShaderMaterial && mat.uniforms.uTime) mat.uniforms.uTime.value = time;
         });
 
         // --- CAMERA & ENVIRONMENT LOGIC (PER-FRAME) ---
@@ -280,6 +369,25 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) =
                 raysGroupRef.current.position.x = Math.round(camera.position.x / snapSize) * snapSize;
                 raysGroupRef.current.position.z = Math.round(camera.position.z / snapSize) * snapSize;
             }
+            if(bubblesRef.current) {
+                bubblesRef.current.visible = true;
+                const positions = bubblesRef.current.geometry.attributes.position;
+                const velocities = bubblesRef.current.geometry.attributes.velocity;
+                const bubbleCount = positions.count;
+                
+                for(let i=0; i < bubbleCount; i++) {
+                    const i3 = i * 3;
+                    positions.array[i3+1] += velocities.array[i3+1] * 0.05; // Move up
+                    positions.array[i3] += Math.sin(time + positions.array[i3+2]) * 0.1; // Sway
+                    
+                    if(positions.array[i3+1] > 5) {
+                        positions.array[i3+1] = -120;
+                        positions.array[i3] = camera.position.x + (Math.random() - 0.5) * 200;
+                        positions.array[i3+2] = camera.position.z + (Math.random() - 0.5) * 200;
+                    }
+                }
+                positions.needsUpdate = true;
+            }
         } else {
             // SURFACE STATE
             if (skyTextureRef.current && envMapRef.current) {
@@ -292,6 +400,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) =
             scene.fog = new THREE.FogExp2(new THREE.Color(currentConfig.colorShallow).lerp(new THREE.Color(0xffffff), 0.4), 0.0015);
             
             if(raysGroupRef.current) raysGroupRef.current.visible = false;
+            if(bubblesRef.current) bubblesRef.current.visible = false;
         }
 
         controlsRef.current?.update();
@@ -299,25 +408,6 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) =
         frameIdRef.current = requestAnimationFrame(animate);
     };
     animate();
-
-    // --- Skybox Loading (runs once on mount) ---
-    if (hdrLoaderRef.current && sceneRef.current && pmremGeneratorRef.current) {
-      const loader = hdrLoaderRef.current;
-      const pmremGenerator = pmremGeneratorRef.current;
-      const url = skyboxUrls['Qwantani Noon'];
-      
-      loader.load(url, (texture) => {
-          texture.mapping = THREE.EquirectangularReflectionMapping;
-          const newEnvMap = pmremGenerator.fromEquirectangular(texture).texture;
-          
-          envMapRef.current = newEnvMap;
-          skyTextureRef.current = texture;
-          
-          materialsRef.current.forEach(mat => {
-              if (mat.uniforms.tSky) mat.uniforms.tSky.value = texture;
-          });
-      });
-    }
 
     const handleResize = () => {
         if(!containerRef.current || !rendererRef.current || !cameraRef.current) return;
@@ -385,9 +475,45 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) =
         if (sandTextureRef.current) sandTextureRef.current.dispose();
         if (skyTextureRef.current) skyTextureRef.current.dispose();
         defaultTex.dispose();
-        renderer.dispose();
+        if (rendererRef.current) rendererRef.current.dispose();
     };
   }, []); 
+
+  // --- Environment Loading ---
+  useEffect(() => {
+    if (!hdrLoaderRef.current || !sceneRef.current || !pmremGeneratorRef.current) return;
+
+    const loader = hdrLoaderRef.current;
+    const pmremGenerator = pmremGeneratorRef.current;
+    
+    loader.load(config.skyboxUrl, (texture) => {
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        const newEnvMap = pmremGenerator.fromEquirectangular(texture).texture;
+        
+        envMapRef.current = newEnvMap;
+        skyTextureRef.current = texture;
+        
+        materialsRef.current.forEach(mat => {
+            if (mat instanceof THREE.ShaderMaterial && mat.uniforms.tSky) mat.uniforms.tSky.value = texture;
+        });
+        
+        if (sceneController) {
+          sceneController.current.extractPalette = () => {
+            return new Promise((resolve) => {
+              const palette = extractPaletteFromTexture(texture);
+              resolve(palette);
+            });
+          };
+
+          // Auto-sync colors on load
+          const palette = extractPaletteFromTexture(texture);
+          if (palette && sceneController.current.updateWaterConfigFromPalette) {
+            sceneController.current.updateWaterConfigFromPalette(palette);
+          }
+        }
+    });
+  }, [config.skyboxUrl, sceneController]);
+
 
   // --- CONFIG UPDATE ---
   useEffect(() => {
@@ -395,23 +521,26 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState }) =
     const shallow = new THREE.Color(config.colorShallow);
     
     // Update Main Shaders
-    materialsRef.current.forEach(mat => {
-        if(mat.uniforms.uColorDeep) mat.uniforms.uColorDeep.value.copy(deep);
-        if(mat.uniforms.uColorShallow) mat.uniforms.uColorShallow.value.copy(shallow);
-        if(mat.uniforms.uTransparency) mat.uniforms.uTransparency.value = config.transparency;
-        if(mat.uniforms.uRoughness) mat.uniforms.uRoughness.value = config.roughness;
-        if(mat.uniforms.uWaveHeight) mat.uniforms.uWaveHeight.value = config.waveHeight;
-        if(mat.uniforms.uWaveSpeed) mat.uniforms.uWaveSpeed.value = config.waveSpeed;
-        if(mat.uniforms.uWaveScale) mat.uniforms.uWaveScale.value = config.waveScale;
-        if(mat.uniforms.uLightIntensity) mat.uniforms.uLightIntensity.value = config.underwaterLightIntensity;
-        if(mat.uniforms.uSunIntensity) mat.uniforms.uSunIntensity.value = config.sunIntensity;
-        if(mat.uniforms.uFogDensity) mat.uniforms.uFogDensity.value = config.underwaterFogDensity;
-        if(mat.uniforms.uRippleIntensity) mat.uniforms.uRippleIntensity.value = config.rippleIntensity;
-        if(mat.uniforms.uRippleNormalIntensity) mat.uniforms.uRippleNormalIntensity.value = config.rippleNormalIntensity;
-        if(mat.uniforms.uNormalFlatness) mat.uniforms.uNormalFlatness.value = config.normalFlatness;
-        if(mat.uniforms.uIOR) mat.uniforms.uIOR.value = config.ior;
-        if(mat.uniforms.uColor) mat.uniforms.uColor.value.copy(shallow);
-    });
+    // FIX: Replaced forEach with a for...of loop to help TypeScript with type narrowing.
+    for (const mat of materialsRef.current) {
+        if (mat instanceof THREE.ShaderMaterial) {
+            if(mat.uniforms.uColorDeep) mat.uniforms.uColorDeep.value.copy(deep);
+            if(mat.uniforms.uColorShallow) mat.uniforms.uColorShallow.value.copy(shallow);
+            if(mat.uniforms.uTransparency) mat.uniforms.uTransparency.value = config.transparency;
+            if(mat.uniforms.uRoughness) mat.uniforms.uRoughness.value = config.roughness;
+            if(mat.uniforms.uWaveHeight) mat.uniforms.uWaveHeight.value = config.waveHeight;
+            if(mat.uniforms.uWaveSpeed) mat.uniforms.uWaveSpeed.value = config.waveSpeed;
+            if(mat.uniforms.uWaveScale) mat.uniforms.uWaveScale.value = config.waveScale;
+            if(mat.uniforms.uLightIntensity) mat.uniforms.uLightIntensity.value = config.underwaterLightIntensity;
+            if(mat.uniforms.uSunIntensity) mat.uniforms.uSunIntensity.value = config.sunIntensity;
+            if(mat.uniforms.uFogDensity) mat.uniforms.uFogDensity.value = config.underwaterFogDensity;
+            if(mat.uniforms.uRippleIntensity) mat.uniforms.uRippleIntensity.value = config.rippleIntensity;
+            if(mat.uniforms.uRippleNormalIntensity) mat.uniforms.uRippleNormalIntensity.value = config.rippleNormalIntensity;
+            if(mat.uniforms.uNormalFlatness) mat.uniforms.uNormalFlatness.value = config.normalFlatness;
+            if(mat.uniforms.uIOR) mat.uniforms.uIOR.value = config.ior;
+            if(mat.uniforms.uColor) mat.uniforms.uColor.value.copy(shallow);
+        }
+    }
 
     if (simMaterialRef.current) {
         simMaterialRef.current.uniforms.uDamping.value = config.rippleDamping;

@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -57,6 +58,7 @@ const FloatingWindow: React.FC<FloatingWindowProps> = ({
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
+    pointerEvents: 'auto',
   };
 
   const headerStyle: React.CSSProperties = {
