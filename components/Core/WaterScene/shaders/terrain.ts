@@ -1,5 +1,3 @@
-
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -80,7 +78,8 @@ vec3 getCausticRGB(vec2 uv) {
         float shift = float(i) * 0.005; 
         vec2 p = uv + shift;
         float v = voronoi(p * 0.8, t * 1.5);
-        float intensity = pow(v * 2.0, 5.0) * 10.0;
+        // Soften the caustic lines to make them blur more nicely.
+        float intensity = pow(v * 2.0, 3.5) * 12.0;
         col[i] = intensity;
     }
     return col;
@@ -137,7 +136,19 @@ void main() {
     vec3 finalColor = mix(albedo, uColorDeep * 0.2, absorption * 0.8);
 
     // 6. CAUSTICS
-    vec3 caustics = getCausticRGB(vWorldPos.xz * 0.15); 
+    vec3 caustics = vec3(0.0);
+    float scale = 0.15;
+    float blurSize = 0.3; // Drastically increased blur radius
+
+    // Increased kernel from 3x3 to 5x5 for a much softer effect
+    for (int x = -2; x <= 2; x++) {
+        for (int y = -2; y <= 2; y++) {
+            vec2 offset = vec2(float(x), float(y)) * blurSize;
+            caustics += getCausticRGB((vWorldPos.xz + offset) * scale);
+        }
+    }
+    caustics /= 25.0; // Normalize by number of samples (5*5)
+
     float causticVis = exp(-depth * 0.05);
     vec3 causticLight = caustics * uColorShallow * uLightIntensity * 1.5;
     
