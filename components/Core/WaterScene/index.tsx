@@ -277,8 +277,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             uColorDeep: { value: new THREE.Color(configRef.current.colorDeep) },
             uColorShallow: { value: new THREE.Color(configRef.current.colorShallow) },
             uLightIntensity: { value: configRef.current.underwaterLightIntensity },
-            uFogNear: { value: configRef.current.underwaterFogNear },
-            uFogFar: { value: configRef.current.underwaterFogFar },
+            uFogDensity: { value: configRef.current.underwaterFogDensity },
             tSand: { value: sandTextureRef.current }
         }
     });
@@ -304,8 +303,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             uWaveHeight: { value: configRef.current.waveHeight },
             uWaveSpeed: { value: configRef.current.waveSpeed },
             uWaveScale: { value: configRef.current.waveScale },
-            uFogNear: { value: configRef.current.underwaterFogNear },
-            uFogFar: { value: configRef.current.underwaterFogFar },
+            uFogDensity: { value: configRef.current.underwaterFogDensity },
             uNormalFlatness: { value: configRef.current.normalFlatness },
             uIOR: { value: configRef.current.ior },
             tRipple: { value: null },
@@ -363,15 +361,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             // UNDERWATER STATE
             scene.background = new THREE.Color(currentConfig.colorDeep);
             scene.environment = null;
-            
-            // Use linear fog for underwater
-            if (!scene.fog || !(scene.fog instanceof THREE.Fog) || (scene.fog as any).isFogExp2) {
-                scene.fog = new THREE.Fog(currentConfig.colorDeep, currentConfig.underwaterFogNear, currentConfig.underwaterFogFar);
-            } else {
-                scene.fog.color.set(currentConfig.colorDeep);
-                scene.fog.near = currentConfig.underwaterFogNear;
-                scene.fog.far = currentConfig.underwaterFogFar;
-            }
+            scene.fog = new THREE.FogExp2(currentConfig.colorDeep, currentConfig.underwaterFogDensity * 0.3);
             
             if(raysGroupRef.current) {
                 raysGroupRef.current.visible = true;
@@ -407,16 +397,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
                 scene.background = new THREE.Color(0x101015); 
                 scene.environment = null;
             }
-            
-            // Use exponential fog for surface
-            const surfaceFogColor = new THREE.Color(currentConfig.colorShallow).lerp(new THREE.Color(0xffffff), 0.4);
-            const surfaceFogDensity = 0.0015;
-            if (!scene.fog || !(scene.fog instanceof THREE.FogExp2) || (scene.fog as any).isFog) {
-                scene.fog = new THREE.FogExp2(surfaceFogColor, surfaceFogDensity);
-            } else {
-                scene.fog.color.set(surfaceFogColor);
-                scene.fog.density = surfaceFogDensity;
-            }
+            scene.fog = new THREE.FogExp2(new THREE.Color(currentConfig.colorShallow).lerp(new THREE.Color(0xffffff), 0.4), 0.0015);
             
             if(raysGroupRef.current) raysGroupRef.current.visible = false;
             if(bubblesRef.current) bubblesRef.current.visible = false;
@@ -552,8 +533,7 @@ const WaterScene: React.FC<WaterSceneProps> = ({ config, initialCameraState, sce
             if(mat.uniforms.uWaveScale) mat.uniforms.uWaveScale.value = config.waveScale;
             if(mat.uniforms.uLightIntensity) mat.uniforms.uLightIntensity.value = config.underwaterLightIntensity;
             if(mat.uniforms.uSunIntensity) mat.uniforms.uSunIntensity.value = config.sunIntensity;
-            if(mat.uniforms.uFogNear) mat.uniforms.uFogNear.value = config.underwaterFogNear;
-            if(mat.uniforms.uFogFar) mat.uniforms.uFogFar.value = config.underwaterFogFar;
+            if(mat.uniforms.uFogDensity) mat.uniforms.uFogDensity.value = config.underwaterFogDensity;
             if(mat.uniforms.uRippleIntensity) mat.uniforms.uRippleIntensity.value = config.rippleIntensity;
             if(mat.uniforms.uRippleNormalIntensity) mat.uniforms.uRippleNormalIntensity.value = config.rippleNormalIntensity;
             if(mat.uniforms.uNormalFlatness) mat.uniforms.uNormalFlatness.value = config.normalFlatness;

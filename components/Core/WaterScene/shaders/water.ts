@@ -78,8 +78,7 @@ uniform vec3 uSunPosition;
 uniform float uTransparency;
 uniform float uRoughness;
 uniform float uSunIntensity;
-uniform float uFogNear;
-uniform float uFogFar;
+uniform float uFogDensity;
 uniform float uNormalFlatness;
 uniform float uIOR;
 uniform sampler2D tSky;
@@ -160,12 +159,15 @@ void main() {
         finalColor = mix(refractedColor, reflectedColor, finalFresnel);
         
         float dist = length(vViewPosition);
+        // Beer's law and fog use consistent density
+        float absorbance = exp(-dist * uFogDensity * 0.1); // Absorb light from sky
+        finalColor *= absorbance;
         
-        // Apply fog
         vec3 fogColor = uColorDeep;
-        float fogFactor = smoothstep(uFogNear, uFogFar, dist);
+        float fogFactor = 1.0 - exp(-dist * uFogDensity * 0.3);
         finalColor = mix(finalColor, fogColor, fogFactor);
 
         gl_FragColor = vec4(finalColor, 1.0);
     }
 }
+`;

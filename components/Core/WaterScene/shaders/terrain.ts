@@ -47,8 +47,7 @@ uniform float uTime;
 uniform vec3 uColorDeep;
 uniform vec3 uColorShallow;
 uniform float uLightIntensity;
-uniform float uFogNear;
-uniform float uFogFar;
+uniform float uFogDensity;
 uniform sampler2D tSand; // Generated Noise Texture
 
 varying vec2 vUv;
@@ -140,7 +139,7 @@ void main() {
 
     // Horizontal Fog
     float dist = length(vViewPosition);
-    float fogFactor = smoothstep(uFogNear, uFogFar, dist);
+    float fogFactor = 1.0 - exp(-dist * uFogDensity * 0.3);
     
     vec3 finalColor = mix(absorbedAlbedo, uColorDeep, fogFactor);
     
@@ -154,3 +153,4 @@ void main() {
 
     gl_FragColor = vec4(finalColor, 1.0);
 }
+`;

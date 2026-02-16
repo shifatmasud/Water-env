@@ -57,15 +57,14 @@ const MetaPrototype = () => {
     skyboxUrl: skyboxOptions[0].url,
     sunIntensity: 1.2,
     colorShallow: '#41737c',
-    colorDeep: '#0b1a32',
+    colorDeep: '#7aa8d6',
     transparency: 0.65,
     roughness: 0.1,
     waveHeight: 0.15,
     waveSpeed: 0.108,
     waveScale: 0.7223,
     normalFlatness: 50,
-    underwaterFogNear: 1.0,
-    underwaterFogFar: 150.0,
+    underwaterFogDensity: 0.15,
     underwaterLightIntensity: 2.0,
     ior: 1.33,
     rippleDamping: 0.98,
@@ -80,7 +79,7 @@ const MetaPrototype = () => {
     if (palette) {
       setWaterConfig(prev => ({
         ...prev,
-        // colorDeep is now constant to maintain underwater mood
+        colorDeep: palette.colorDeep,
         colorShallow: palette.colorShallow,
       }));
       addLog(`🎨 Scene colors synced from environment.`);
